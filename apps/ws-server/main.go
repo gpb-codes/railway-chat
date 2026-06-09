@@ -9,7 +9,6 @@ import (
 
 	"ws-server/internal"
 
-	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
 
@@ -18,7 +17,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
 		allowed := os.Getenv("ALLOWED_ORIGINS")
-		if allowed == "" {
+		if allowed == "" || allowed == "*" {
 			return true
 		}
 		origin := r.Header.Get("Origin")
@@ -35,19 +34,16 @@ func main() {
 	hub := internal.NewHub()
 	go hub.Run()
 
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
+	mux := http.NewServeMux()
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"online": hub.GetOnlineCount(),
-		})
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"status":"ok","online":%d}`, hub.GetOnlineCount())
 	})
 
-	r.GET("/ws", func(c *gin.Context) {
-		username := c.Query("username")
-		userID := c.Query("userId")
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		username := r.URL.Query().Get("username")
+		userID := r.URL.Query().Get("userId")
 		if username == "" {
 			username = "anon"
 		}
@@ -55,7 +51,7 @@ func main() {
 			userID = username
 		}
 
-		conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Printf("upgrade error: %v", err)
 			return
@@ -74,10 +70,9 @@ func main() {
 		go client.ReadPump()
 	})
 
-	r.GET("/api/online", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"count": hub.GetOnlineCount(),
-		})
+	mux.HandleFunc("/api/online", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"count":%d}`, hub.GetOnlineCount())
 	})
 
 	port := os.Getenv("PORT")
@@ -86,7 +81,7 @@ func main() {
 	}
 
 	log.Printf("WS Server starting on :%s", port)
-	if err := r.Run(fmt.Sprintf(":%s", port)); err != nil {
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatal(err)
 	}
 }

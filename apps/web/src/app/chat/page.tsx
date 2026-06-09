@@ -28,7 +28,7 @@ export default function ChatPage() {
       router.push('/');
       return;
     }
-    setUser(JSON.load(stored));
+    setUser(JSON.parse(stored));
   }, [router]);
 
   useEffect(() => {

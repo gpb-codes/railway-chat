@@ -47,11 +47,11 @@ func (h *Hub) Run() {
 		case client := <-h.unregister:
 			h.mu.Lock()
 			if _, ok := h.clients[client]; ok {
-			if client.Room != "" {
-				h.removeClientFromRoom(client, client.Room)
-			}
-			delete(h.clients, client)
-			close(client.Send)
+				if client.Room != "" {
+					h.removeClientFromRoom(client, client.Room)
+				}
+				delete(h.clients, client)
+				close(client.Send)
 				log.Printf("- %s disconnected", client.Username)
 			}
 			h.mu.Unlock()
@@ -83,46 +83,44 @@ func (h *Hub) handleJoinRoom(client *Client, room string) {
 	if client.Room != "" {
 		h.removeClientFromRoom(client, client.Room)
 	}
-
 	if h.rooms[room] == nil {
 		h.rooms[room] = make(map[*Client]bool)
 	}
-
 	h.rooms[room][client] = true
 	client.Room = room
 	log.Printf("%s joined %s", client.Username, room)
 
-	joinMsg := &Message{
+	h.broadcastToRoom(room, &Message{
 		Type:      MsgTypeJoin,
 		Room:      room,
 		Username:  client.Username,
 		UserID:    client.UserID,
 		Content:   client.Username + " se unió a " + room,
 		Timestamp: time.Now().UTC(),
-	}
-	h.broadcastToRoom(room, joinMsg)
+	})
 }
 
 func (h *Hub) removeClientFromRoom(client *Client, room string) {
-	if h.rooms[room] != nil {
-		if _, ok := h.rooms[room][client]; ok {
-			delete(h.rooms[room], client)
-			client.Room = ""
+	if h.rooms[room] == nil {
+		return
+	}
+	if _, ok := h.rooms[room][client]; !ok {
+		return
+	}
+	delete(h.rooms[room], client)
+	client.Room = ""
 
-			leaveMsg := &Message{
-				Type:      MsgTypeLeave,
-				Room:      room,
-				Username:  client.Username,
-				UserID:    client.UserID,
-				Content:   client.Username + " salió de " + room,
-				Timestamp: time.Now().UTC(),
-			}
-			h.broadcastToRoom(room, leaveMsg)
+	h.broadcastToRoom(room, &Message{
+		Type:      MsgTypeLeave,
+		Room:      room,
+		Username:  client.Username,
+		UserID:    client.UserID,
+		Content:   client.Username + " salió de " + room,
+		Timestamp: time.Now().UTC(),
+	})
 
-			if len(h.rooms[room]) == 0 {
-				delete(h.rooms, room)
-			}
-		}
+	if len(h.rooms[room]) == 0 {
+		delete(h.rooms, room)
 	}
 }
 
@@ -141,16 +139,16 @@ func (h *Hub) handleTyping(msg *Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if clients, ok := h.rooms[msg.Room]; ok {
-		for client := range clients {
-			if client.UserID != msg.UserID {
-				data, _ := json.Marshal(msg)
-				select {
-				case client.Send <- data:
-				default:
-					close(client.Send)
-					delete(h.clients, client)
-				}
+	clients, ok := h.rooms[msg.Room]
+	if !ok {
+		return
+	}
+	data, _ := json.Marshal(msg)
+	for client := range clients {
+		if client.UserID != msg.UserID {
+			select {
+			case client.Send <- data:
+			default:
 			}
 		}
 	}
@@ -164,15 +162,15 @@ func (h *Hub) broadcastToRoom(room string, msg *Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	if clients, ok := h.rooms[room]; ok {
-		data, _ := json.Marshal(msg)
-		for client := range clients {
-			select {
-			case client.Send <- data:
-			default:
-				close(client.Send)
-				delete(h.clients, client)
-			}
+	clients, ok := h.rooms[room]
+	if !ok {
+		return
+	}
+	data, _ := json.Marshal(msg)
+	for client := range clients {
+		select {
+		case client.Send <- data:
+		default:
 		}
 	}
 }
@@ -186,8 +184,6 @@ func (h *Hub) broadcastToAll(msg *Message) {
 		select {
 		case client.Send <- data:
 		default:
-			close(client.Send)
-			delete(h.clients, client)
 		}
 	}
 }
@@ -204,16 +200,13 @@ func (h *Hub) sendOnlineUsers() {
 	}
 	h.mu.RUnlock()
 
-	msg := OnlineUsersMsg{Type: "online_users", Users: users}
-	data, _ := json.Marshal(msg)
+	data, _ := json.Marshal(OnlineUsersMsg{Type: "online_users", Users: users})
 
 	h.mu.RLock()
 	for client := range h.clients {
 		select {
 		case client.Send <- data:
 		default:
-			close(client.Send)
-			delete(h.clients, client)
 		}
 	}
 	h.mu.RUnlock()
