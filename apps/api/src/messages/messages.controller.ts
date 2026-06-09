@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Delete, Param, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, Query, UseGuards, Request, NotFoundException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { MessagesService } from './messages.service';
+import { CreateMessageDto } from './dto/messages.dto';
 
 @Controller('messages')
 @UseGuards(AuthGuard('jwt'))
@@ -8,8 +9,15 @@ export class MessagesController {
   constructor(private messagesService: MessagesService) {}
 
   @Post()
-  create(@Request() req, @Body() body: { channelId: string; content: string; type?: string; parentId?: string }) {
-    return this.messagesService.create(req.user.sub, body.channelId, body.content, body.type, body.parentId);
+  async create(@Request() req, @Body() dto: CreateMessageDto) {
+    const message = await this.messagesService.create(
+      req.user.sub,
+      dto.channelId,
+      dto.content,
+      'text',
+      dto.parentId,
+    );
+    return message;
   }
 
   @Get('channel/:channelId')
@@ -27,12 +35,20 @@ export class MessagesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.messagesService.findById(id);
+  async findOne(@Param('id') id: string) {
+    const message = await this.messagesService.findById(id);
+    if (!message) {
+      throw new NotFoundException('Message not found');
+    }
+    return message;
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string, @Request() req) {
-    return this.messagesService.delete(id, req.user.sub);
+  async delete(@Param('id') id: string, @Request() req) {
+    const result = await this.messagesService.delete(id, req.user.sub);
+    if (!result) {
+      throw new NotFoundException('Message not found or not authorized');
+    }
+    return { success: true };
   }
 }

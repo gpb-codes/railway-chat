@@ -40,6 +40,7 @@ export class ChatSocket {
 
     this.ws.onopen = () => {
       console.log('WS connected');
+      this.emit('open');
       this.emit('connected');
     };
 
@@ -60,11 +61,14 @@ export class ChatSocket {
 
     this.ws.onclose = () => {
       console.log('WS disconnected');
+      this.emit('close');
       this.emit('disconnected');
       this.scheduleReconnect();
     };
 
-    this.ws.onerror = () => {
+    this.ws.onerror = (error) => {
+      console.error('WS error:', error);
+      this.emit('error', error);
       this.ws?.close();
     };
   }
@@ -97,8 +101,8 @@ export class ChatSocket {
     this.send({ type: 'dm', content, toUser });
   }
 
-  sendTyping(room: string) {
-    this.send({ type: 'typing', room });
+  sendTyping(room: string, username?: string) {
+    this.send({ type: 'typing', room, username });
   }
 
   sendReaction(messageId: string, room: string, reaction: string) {

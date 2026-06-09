@@ -1,6 +1,7 @@
-import { Controller, Get, Put, Body, Query, UseGuards, Request, Param } from '@nestjs/common';
+import { Controller, Get, Put, Body, Query, UseGuards, Request, Param, NotFoundException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
+import { UpdateUserDto } from './dto/users.dto';
 
 @Controller('users')
 export class UsersController {
@@ -14,8 +15,8 @@ export class UsersController {
 
   @UseGuards(AuthGuard('jwt'))
   @Put('me')
-  updateMe(@Request() req, @Body() body: { avatar?: string; bio?: string; status?: string }) {
-    return this.usersService.updateProfile(req.user.sub, body);
+  updateMe(@Request() req, @Body() dto: UpdateUserDto) {
+    return this.usersService.updateProfile(req.user.sub, dto);
   }
 
   @UseGuards(AuthGuard('jwt'))
@@ -26,7 +27,11 @@ export class UsersController {
 
   @UseGuards(AuthGuard('jwt'))
   @Get(':id')
-  getUser(@Param('id') id: string) {
-    return this.usersService.findById(id);
+  async getUser(@Param('id') id: string) {
+    const user = await this.usersService.findById(id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
   }
 }

@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Delete, Param, Body, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Body, UseGuards, Request, NotFoundException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ChannelsService } from './channels.service';
+import { CreateChannelDto } from './dto/channels.dto';
 
 @Controller('channels')
 @UseGuards(AuthGuard('jwt'))
@@ -13,8 +14,8 @@ export class ChannelsController {
   }
 
   @Post()
-  create(@Request() req, @Body() body: { name: string; type?: string }) {
-    return this.channelsService.create(body.name, req.user.sub, body.type);
+  create(@Request() req, @Body() dto: CreateChannelDto) {
+    return this.channelsService.create(dto.name, req.user.sub, dto.type);
   }
 
   @Post(':id/join')
@@ -28,8 +29,9 @@ export class ChannelsController {
   }
 
   @Get(':id/members')
-  getMembers(@Param('id') id: string) {
-    return this.channelsService.getMembers(id);
+  async getMembers(@Param('id') id: string) {
+    const members = await this.channelsService.getMembers(id);
+    return members;
   }
 
   @Post('dm/:userId')

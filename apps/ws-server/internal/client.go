@@ -16,12 +16,27 @@ const (
 )
 
 type Client struct {
-	Hub      *Hub
-	Conn     *websocket.Conn
-	Send     chan []byte
-	Room     string
-	Username string
-	UserID   string
+	Hub        *Hub
+	Conn       *websocket.Conn
+	Send       chan []byte
+	Room       string
+	Username   string
+	UserID     string
+	ConnectedAt time.Time
+	LastActive  time.Time
+}
+
+func NewClient(hub *Hub, conn *websocket.Conn, username, userID string) *Client {
+	now := time.Now().UTC()
+	return &Client{
+		Hub:         hub,
+		Conn:        conn,
+		Send:        make(chan []byte, 256),
+		Username:    username,
+		UserID:      userID,
+		ConnectedAt: now,
+		LastActive:  now,
+	}
 }
 
 func (c *Client) ReadPump() {
@@ -34,6 +49,7 @@ func (c *Client) ReadPump() {
 	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.Conn.SetPongHandler(func(string) error {
 		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		c.LastActive = time.Now().UTC()
 		return nil
 	})
 
@@ -41,14 +57,16 @@ func (c *Client) ReadPump() {
 		_, data, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure, websocket.CloseAbnormalClosure) {
-				log.Printf("ws error: %v", err)
+				log.Printf("[WS] Read error for %s: %v", c.Username, err)
 			}
 			break
 		}
 
+		c.LastActive = time.Now().UTC()
+
 		var wsMsg WSMessage
 		if err := json.Unmarshal(data, &wsMsg); err != nil {
-			log.Printf("parse error: %v", err)
+			log.Printf("[WS] Parse error from %s: %v", c.Username, err)
 			continue
 		}
 
@@ -81,6 +99,8 @@ func (c *Client) ReadPump() {
 			c.Hub.typing <- &msg
 		case MsgTypeReaction:
 			c.Hub.reaction <- &msg
+		default:
+			log.Printf("[WS] Unknown message type from %s: %s", c.Username, msg.Type)
 		}
 	}
 }

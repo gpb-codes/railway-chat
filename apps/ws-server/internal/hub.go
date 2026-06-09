@@ -40,8 +40,9 @@ func (h *Hub) Run() {
 		case client := <-h.Register:
 			h.mu.Lock()
 			h.clients[client] = true
+			clientCount := len(h.clients)
 			h.mu.Unlock()
-			log.Printf("+ %s connected (%s)", client.Username, client.UserID)
+			log.Printf("[HUB] + %s connected (total: %d)", client.Username, clientCount)
 			h.sendOnlineUsers()
 
 		case client := <-h.unregister:
@@ -52,7 +53,7 @@ func (h *Hub) Run() {
 				}
 				delete(h.clients, client)
 				close(client.Send)
-				log.Printf("- %s disconnected", client.Username)
+				log.Printf("[HUB] - %s disconnected", client.Username)
 			}
 			h.mu.Unlock()
 			h.sendOnlineUsers()
@@ -88,14 +89,14 @@ func (h *Hub) handleJoinRoom(client *Client, room string) {
 	}
 	h.rooms[room][client] = true
 	client.Room = room
-	log.Printf("%s joined %s", client.Username, room)
+	log.Printf("[HUB] %s joined room %s", client.Username, room)
 
 	h.broadcastToRoom(room, &Message{
 		Type:      MsgTypeJoin,
 		Room:      room,
 		Username:  client.Username,
 		UserID:    client.UserID,
-		Content:   client.Username + " se unió a " + room,
+		Content:   client.Username + " joined " + room,
 		Timestamp: time.Now().UTC(),
 	})
 }
@@ -115,7 +116,7 @@ func (h *Hub) removeClientFromRoom(client *Client, room string) {
 		Room:      room,
 		Username:  client.Username,
 		UserID:    client.UserID,
-		Content:   client.Username + " salió de " + room,
+		Content:   client.Username + " left " + room,
 		Timestamp: time.Now().UTC(),
 	})
 
@@ -149,6 +150,7 @@ func (h *Hub) handleTyping(msg *Message) {
 			select {
 			case client.Send <- data:
 			default:
+				log.Printf("[HUB] Failed to send typing to %s (buffer full)", client.Username)
 			}
 		}
 	}
@@ -171,6 +173,7 @@ func (h *Hub) broadcastToRoom(room string, msg *Message) {
 		select {
 		case client.Send <- data:
 		default:
+			log.Printf("[HUB] Failed to send to %s in room %s (buffer full)", client.Username, room)
 		}
 	}
 }
@@ -184,6 +187,7 @@ func (h *Hub) broadcastToAll(msg *Message) {
 		select {
 		case client.Send <- data:
 		default:
+			log.Printf("[HUB] Failed to broadcast to %s (buffer full)", client.Username)
 		}
 	}
 }
@@ -216,4 +220,13 @@ func (h *Hub) GetOnlineCount() int {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return len(h.clients)
+}
+
+func (h *Hub) GetRoomCount(room string) int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if clients, ok := h.rooms[room]; ok {
+		return len(clients)
+	}
+	return 0
 }

@@ -53,5 +53,10 @@ export const api = {
   updateProfile: (data: { avatar?: string; bio?: string; status?: string }) =>
     request('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
 
+  deleteMessage: (id: string) =>
+    request(`/messages/${id}`, { method: 'DELETE' }),
+
   searchUsers: (q: string) => request(`/users/search?q=${encodeURIComponent(q)}`),
+
+  getUser: (id: string) => request(`/users/${id}`),
 };
