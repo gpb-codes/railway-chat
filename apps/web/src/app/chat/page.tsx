@@ -8,6 +8,7 @@ import ChatSidebar from '@/components/ChatSidebar';
 import MessageList from '@/components/MessageList';
 import MessageInput from '@/components/MessageInput';
 import UserList from '@/components/UserList';
+import { UsersIcon } from '@/components/Icons';
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8080';
 
@@ -41,7 +42,19 @@ export default function ChatPage() {
       if (msg.type === 'online_users') {
         setOnlineUsers(msg.users);
       } else {
-        setMessages((prev) => [...prev, msg]);
+        const normalized = {
+          id: msg.id || crypto.randomUUID(),
+          type: msg.type || 'message',
+          content: msg.content,
+          username: msg.username || msg.user?.username || 'unknown',
+          userId: msg.userId || msg.user?.id || '',
+          timestamp: msg.timestamp || msg.createdAt || new Date().toISOString(),
+          user: msg.user || { id: msg.userId, username: msg.username },
+        };
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === normalized.id)) return prev;
+          return [...prev, normalized];
+        });
       }
     });
 
@@ -70,9 +83,24 @@ export default function ChatPage() {
     api.getMessages(activeChannel).then(setMessages);
   }, [activeChannel, socket]);
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = async (content: string) => {
     if (!socket || !activeChannel) return;
-    socket.sendMessage(activeChannel, content);
+    try {
+      const saved = await api.sendMessage(activeChannel, content);
+      const msg = {
+        id: saved.id,
+        type: 'message',
+        content: saved.content,
+        username: saved.user?.username || user.username,
+        userId: saved.user?.id || user.id,
+        timestamp: saved.createdAt,
+        user: saved.user,
+      };
+      setMessages((prev) => [...prev, msg]);
+      socket.sendMessage(activeChannel, msg);
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
   };
 
   const handleCreateChannel = async (name: string) => {
@@ -106,7 +134,7 @@ export default function ChatPage() {
             className="p-2 rounded-lg"
             style={{ background: 'var(--bg-tertiary)' }}
           >
-            👥
+            <UsersIcon size={18} />
           </button>
         </div>
 

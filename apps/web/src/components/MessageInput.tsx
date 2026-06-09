@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { SendIcon } from './Icons';
 
 interface MessageInputProps {
   onSend: (content: string) => void;
@@ -41,12 +42,13 @@ export default function MessageInput({ onSend }: MessageInputProps) {
         <button
           onClick={handleSubmit}
           disabled={!message.trim()}
-          className="px-4 py-2 rounded-lg font-medium text-white text-sm"
+          className="px-4 py-2 rounded-lg font-medium text-white text-sm flex items-center gap-2"
           style={{
             background: message.trim() ? 'var(--accent)' : 'var(--bg-tertiary)',
             opacity: message.trim() ? 1 : 0.5,
           }}
         >
+          <SendIcon size={16} />
           Enviar
         </button>
       </div>

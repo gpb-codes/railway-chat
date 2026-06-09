@@ -59,8 +59,10 @@ func (c *Client) ReadPump() {
 			UserID:    c.UserID,
 			Room:      wsMsg.Room,
 			ToUser:    wsMsg.ToUser,
-			Emoji:     wsMsg.Emoji,
+			Reaction:  wsMsg.Reaction,
 			MessageID: wsMsg.MessageID,
+			ID:        wsMsg.ID,
+			User:      wsMsg.User,
 			Timestamp: time.Now().UTC(),
 		}
 

@@ -5,7 +5,7 @@ export interface WSMessage {
   userId: string;
   room?: string;
   toUser?: string;
-  emoji?: string;
+  reaction?: string;
   messageId?: string;
   timestamp: string;
 }
@@ -85,8 +85,12 @@ export class ChatSocket {
     this.send({ type: 'leave', room });
   }
 
-  sendMessage(room: string, content: string) {
-    this.send({ type: 'message', content, room });
+  sendMessage(room: string, content: string | object) {
+    if (typeof content === 'string') {
+      this.send({ type: 'message', content, room });
+    } else {
+      this.send({ ...content, room });
+    }
   }
 
   sendDM(toUser: string, content: string) {
@@ -97,8 +101,8 @@ export class ChatSocket {
     this.send({ type: 'typing', room });
   }
 
-  sendReaction(messageId: string, room: string, emoji: string) {
-    this.send({ type: 'reaction', messageId, room, emoji });
+  sendReaction(messageId: string, room: string, reaction: string) {
+    this.send({ type: 'reaction', messageId, room, reaction });
   }
 
   private send(data: any) {

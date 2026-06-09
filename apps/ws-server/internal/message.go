@@ -21,8 +21,16 @@ type Message struct {
 	Room      string      `json:"room,omitempty"`
 	ToUser    string      `json:"toUser,omitempty"`
 	Timestamp time.Time   `json:"timestamp"`
-	Emoji     string      `json:"emoji,omitempty"`
+	Reaction  string      `json:"reaction,omitempty"`
 	MessageID string      `json:"messageId,omitempty"`
+	ID        string      `json:"id,omitempty"`
+	User      *UserObj    `json:"user,omitempty"`
+}
+
+type UserObj struct {
+	ID       string `json:"id"`
+	Username string `json:"username"`
+	Avatar   string `json:"avatar,omitempty"`
 }
 
 type WSMessage struct {
@@ -30,8 +38,10 @@ type WSMessage struct {
 	Content   string      `json:"content"`
 	Room      string      `json:"room"`
 	ToUser    string      `json:"toUser,omitempty"`
-	Emoji     string      `json:"emoji,omitempty"`
+	Reaction  string      `json:"reaction,omitempty"`
 	MessageID string      `json:"messageId,omitempty"`
+	ID        string      `json:"id,omitempty"`
+	User      *UserObj    `json:"user,omitempty"`
 }
 
 type OnlineUsersMsg struct {

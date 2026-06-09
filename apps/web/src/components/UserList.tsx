@@ -1,6 +1,7 @@
 'use client';
 
 import { OnlineUser } from '@/lib/websocket';
+import { UsersIcon } from './Icons';
 
 interface UserListProps {
   users: OnlineUser[];
@@ -13,7 +14,8 @@ export default function UserList({ users }: UserListProps) {
       style={{ background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border)' }}
     >
       <div className="p-3" style={{ borderBottom: '1px solid var(--border)' }}>
-        <h3 className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
+        <h3 className="text-sm font-semibold flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+          <UsersIcon size={16} />
           Usuarios Online ({users.length})
         </h3>
       </div>

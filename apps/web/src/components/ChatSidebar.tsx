@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { HashIcon, PlusIcon, LogoutIcon } from './Icons';
 
 interface ChatSidebarProps {
   channels: any[];
@@ -37,7 +38,7 @@ export default function ChatSidebar({ channels, activeChannel, onSelectChannel, 
             className="text-lg leading-none"
             style={{ color: 'var(--text-secondary)' }}
           >
-            +
+            <PlusIcon size={16} />
           </button>
         </div>
 
@@ -55,7 +56,7 @@ export default function ChatSidebar({ channels, activeChannel, onSelectChannel, 
               className="text-xs px-2 py-1 rounded"
               style={{ background: 'var(--accent)', color: 'white' }}
             >
-              +
+              <PlusIcon size={14} />
             </button>
           </div>
         )}
@@ -70,7 +71,7 @@ export default function ChatSidebar({ channels, activeChannel, onSelectChannel, 
               color: activeChannel === ch.id ? 'var(--text-primary)' : 'var(--text-secondary)',
             }}
           >
-            <span style={{ color: 'var(--accent)' }}>#</span>
+            <HashIcon size={14} className="flex-shrink-0" style={{ color: 'var(--accent)' }} />
             <span className="truncate">{ch.name}</span>
             {ch._count && (
               <span className="ml-auto text-xs" style={{ color: 'var(--text-secondary)' }}>
@@ -84,9 +85,10 @@ export default function ChatSidebar({ channels, activeChannel, onSelectChannel, 
       <div className="p-3" style={{ borderTop: '1px solid var(--border)' }}>
         <button
           onClick={() => { localStorage.clear(); window.location.href = '/'; }}
-          className="w-full text-sm py-2 rounded-lg"
+          className="w-full text-sm py-2 rounded-lg flex items-center justify-center gap-2"
           style={{ color: 'var(--text-secondary)' }}
         >
+          <LogoutIcon size={16} />
           Cerrar sesión
         </button>
       </div>

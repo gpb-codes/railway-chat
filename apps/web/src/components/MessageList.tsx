@@ -36,7 +36,7 @@ export default function MessageList({ messages, currentUser }: MessageListProps)
           );
         }
 
-        const isOwn = msg.userId === currentUser?.id;
+        const isOwn = msg.userId === currentUser?.id || msg.user?.id === currentUser?.id;
 
         return (
           <div
@@ -51,7 +51,7 @@ export default function MessageList({ messages, currentUser }: MessageListProps)
             >
               {!isOwn && (
                 <p className="text-xs font-semibold mb-1" style={{ color: 'var(--accent)' }}>
-                  {msg.username || msg.user?.username}
+                  {msg.user?.username || msg.username}
                 </p>
               )}
               <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
