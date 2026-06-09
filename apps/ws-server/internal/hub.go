@@ -1,0 +1,226 @@
+package internal
+
+import (
+	"encoding/json"
+	"log"
+	"sync"
+	"time"
+)
+
+type Hub struct {
+	mu         sync.RWMutex
+	clients    map[*Client]bool
+	rooms      map[string]map[*Client]bool
+	broadcast  chan *Message
+	Register   chan *Client
+	unregister chan *Client
+	joinRoom   chan *RoomRequest
+	leaveRoom  chan *RoomRequest
+	typing     chan *Message
+	reaction   chan *Message
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		clients:    make(map[*Client]bool),
+		rooms:      make(map[string]map[*Client]bool),
+		broadcast:  make(chan *Message, 256),
+		Register:   make(chan *Client),
+		unregister: make(chan *Client),
+		joinRoom:   make(chan *RoomRequest),
+		leaveRoom:  make(chan *RoomRequest),
+		typing:     make(chan *Message, 256),
+		reaction:   make(chan *Message, 256),
+	}
+}
+
+func (h *Hub) Run() {
+	for {
+		select {
+		case client := <-h.Register:
+			h.mu.Lock()
+			h.clients[client] = true
+			h.mu.Unlock()
+			log.Printf("+ %s connected (%s)", client.Username, client.UserID)
+			h.sendOnlineUsers()
+
+		case client := <-h.unregister:
+			h.mu.Lock()
+			if _, ok := h.clients[client]; ok {
+			if client.Room != "" {
+				h.removeClientFromRoom(client, client.Room)
+			}
+			delete(h.clients, client)
+			close(client.Send)
+				log.Printf("- %s disconnected", client.Username)
+			}
+			h.mu.Unlock()
+			h.sendOnlineUsers()
+
+		case req := <-h.joinRoom:
+			h.mu.Lock()
+			h.handleJoinRoom(req.client, req.room)
+			h.mu.Unlock()
+
+		case req := <-h.leaveRoom:
+			h.mu.Lock()
+			h.removeClientFromRoom(req.client, req.room)
+			h.mu.Unlock()
+
+		case msg := <-h.broadcast:
+			h.handleBroadcast(msg)
+
+		case msg := <-h.typing:
+			h.handleTyping(msg)
+
+		case msg := <-h.reaction:
+			h.handleReaction(msg)
+		}
+	}
+}
+
+func (h *Hub) handleJoinRoom(client *Client, room string) {
+	if client.Room != "" {
+		h.removeClientFromRoom(client, client.Room)
+	}
+
+	if h.rooms[room] == nil {
+		h.rooms[room] = make(map[*Client]bool)
+	}
+
+	h.rooms[room][client] = true
+	client.Room = room
+	log.Printf("%s joined %s", client.Username, room)
+
+	joinMsg := &Message{
+		Type:      MsgTypeJoin,
+		Room:      room,
+		Username:  client.Username,
+		UserID:    client.UserID,
+		Content:   client.Username + " se unió a " + room,
+		Timestamp: time.Now().UTC(),
+	}
+	h.broadcastToRoom(room, joinMsg)
+}
+
+func (h *Hub) removeClientFromRoom(client *Client, room string) {
+	if h.rooms[room] != nil {
+		if _, ok := h.rooms[room][client]; ok {
+			delete(h.rooms[room], client)
+			client.Room = ""
+
+			leaveMsg := &Message{
+				Type:      MsgTypeLeave,
+				Room:      room,
+				Username:  client.Username,
+				UserID:    client.UserID,
+				Content:   client.Username + " salió de " + room,
+				Timestamp: time.Now().UTC(),
+			}
+			h.broadcastToRoom(room, leaveMsg)
+
+			if len(h.rooms[room]) == 0 {
+				delete(h.rooms, room)
+			}
+		}
+	}
+}
+
+func (h *Hub) handleBroadcast(msg *Message) {
+	if msg.Room != "" {
+		h.broadcastToRoom(msg.Room, msg)
+	} else {
+		h.broadcastToAll(msg)
+	}
+}
+
+func (h *Hub) handleTyping(msg *Message) {
+	if msg.Room == "" {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if clients, ok := h.rooms[msg.Room]; ok {
+		for client := range clients {
+			if client.UserID != msg.UserID {
+				data, _ := json.Marshal(msg)
+				select {
+				case client.Send <- data:
+				default:
+					close(client.Send)
+					delete(h.clients, client)
+				}
+			}
+		}
+	}
+}
+
+func (h *Hub) handleReaction(msg *Message) {
+	h.handleBroadcast(msg)
+}
+
+func (h *Hub) broadcastToRoom(room string, msg *Message) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	if clients, ok := h.rooms[room]; ok {
+		data, _ := json.Marshal(msg)
+		for client := range clients {
+			select {
+			case client.Send <- data:
+			default:
+				close(client.Send)
+				delete(h.clients, client)
+			}
+		}
+	}
+}
+
+func (h *Hub) broadcastToAll(msg *Message) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	data, _ := json.Marshal(msg)
+	for client := range h.clients {
+		select {
+		case client.Send <- data:
+		default:
+			close(client.Send)
+			delete(h.clients, client)
+		}
+	}
+}
+
+func (h *Hub) sendOnlineUsers() {
+	h.mu.RLock()
+	users := make([]OnlineUser, 0, len(h.clients))
+	for client := range h.clients {
+		users = append(users, OnlineUser{
+			UserID:   client.UserID,
+			Username: client.Username,
+			Room:     client.Room,
+		})
+	}
+	h.mu.RUnlock()
+
+	msg := OnlineUsersMsg{Type: "online_users", Users: users}
+	data, _ := json.Marshal(msg)
+
+	h.mu.RLock()
+	for client := range h.clients {
+		select {
+		case client.Send <- data:
+		default:
+			close(client.Send)
+			delete(h.clients, client)
+		}
+	}
+	h.mu.RUnlock()
+}
+
+func (h *Hub) GetOnlineCount() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients)
+}
